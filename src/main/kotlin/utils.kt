@@ -18,3 +18,9 @@ fun Robot.toActiveObject() = ActiveObject(this)
 
 val Collection<Robot>.goalkeeper
     get() = this/*.sortedByDescending { distance(it, game.ball) }*/.first()
+
+val Array<Robot>.opponents
+    get() = this.filter { !it.is_teammate }.sortedBy { it.id }
+
+val Array<Robot>.teammates
+    get() = this.filter { it.is_teammate }.sortedBy { it.id }
