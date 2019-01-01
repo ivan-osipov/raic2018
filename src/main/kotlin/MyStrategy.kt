@@ -1,57 +1,79 @@
+import RobotState.*
 import com.google.gson.GsonBuilder
-import model.*
+import model.Action
+import model.Game
+import model.Robot
+import model.Rules
 import kotlin.math.*
 
 class MyStrategy : Strategy {
 
+    //constants
     private val gson = GsonBuilder()
             .create()
+    val maxGoalX by lazy { rules.arena.goal_width / 2 - rules.arena.bottom_radius }
+    val minGoalX by lazy { -rules.arena.goal_width / 2 + rules.arena.bottom_radius }
+    val goalZ by lazy { -rules.arena.depth / 2 }
+    val frontGoalPoint by lazy { Vector3d((maxGoalX + minGoalX) / 2, me.radius, goalZ) }
 
+    //tick data
     lateinit var me: Robot
     lateinit var rules: Rules
     lateinit var game: Game
     lateinit var action: Action
+    lateinit var simulator: Simulator
 
-    val teammates
-        get() = game.robots.filter { it.is_teammate }.sortedBy { it.id }
-
-    val opponents
-        get() = game.robots.opponents
-
+    //computed data
     var isGk: Boolean = false
-
-    val targetPostions = HashMap<Int, Point>()
-
-    val maxGoalX by lazy { rules.arena.goal_width / 2 - rules.arena.bottom_radius }
-    val minGoalX by lazy { -rules.arena.goal_width / 2 + rules.arena.bottom_radius }
-    val goalZ by lazy { -rules.arena.depth / 2 }
-
-    lateinit var potentialFields: PotentialFields
+    val states = HashMap<Int, RobotState>()
+    val targetPostions = HashMap<Int, Vector3d>()
+    lateinit var teammates: List<Robot>
+    lateinit var opponents: List<Robot>
 
     var forwardsAreWaiting = false
-
+    lateinit var potentialFields: PotentialFields
 
     override fun act(me: Robot, rules: Rules, game: Game, action: Action) {
         init(me, rules, game, action)
         doBehaviour()
     }
 
-    private fun doBehaviour() {
-        manageGoalkeeper()
-        manageForwards()
+    private fun init(me: Robot, rules: Rules, game: Game, action: Action) {
+        this.me = me
+        this.rules = rules
+        this.game = game
+        this.action = action
+        this.simulator = Simulator(rules)
+        targetPostions.clear()
+        teammates = game.robots.teammates
+        if (states.isEmpty()) {
+            val (teammate1, teammate2) = teammates
+                    .sortedBy { distance(it.toActiveObject(simulator.rules).position, frontGoalPoint) }
+            states[teammate1.id] = DEFENCE
+            states[teammate2.id] = ATTACK
+        }
+        opponents = game.robots.opponents
     }
 
-    private fun manageGoalkeeper() {
-        if (!isGk) return
+    private fun doBehaviour() {
+        when (states[me.id]) {
+            ATTACK -> attack()
+            DEFENCE -> defence()
+            RUNNING_ON_POSITION -> println()
+            KNOCKING_OUT -> println()
+            WAITING -> println()
+        }
+    }
 
-        val gkActiveObject = teammates.goalkeeper.toActiveObject()
-        val ballActiveObject = game.ball.toActiveObject()
+    private fun defence() {
+        val gkActiveObject = me.toActiveObject(simulator.rules)
+        val ballActiveObject = game.ball.toEntity(simulator.rules)
 
-        val gkBallMeetingTime = timeToMeetingManagedAndUnmanagedObjects(gkActiveObject, ballActiveObject)
-        val predictedBallPosition = ballActiveObject.predictedPosition(gkBallMeetingTime, rules.arena)
+        val gkBallMeetingTime = simulator.timeToMeetingManagedAndUnmanagedObjects(gkActiveObject, ballActiveObject)
+        val predictedBallPosition = ballActiveObject.predictedPosition(gkBallMeetingTime, simulator)
 
-        val predictedCollision = opponents.mapNotNull { predictedCollision(it.toActiveObject(), ballActiveObject) }.firstOrNull()
-        val outGkBallMeetingTime = timeToMeetingRunningRobotAndUnmanagedObjects(gkActiveObject, ballActiveObject, rules)
+        val predictedCollision = opponents.mapNotNull { predictedCollision(it.toActiveObject(simulator.rules), ballActiveObject, simulator) }.firstOrNull()
+        val outGkBallMeetingTime = simulator.timeToMeetingManagedAndUnmanagedObjects(gkActiveObject, ballActiveObject)
 
         val forwards = teammates.filter { it.id != me.id }
         if (forwardsAreWaiting ||
@@ -61,11 +83,11 @@ class MyStrategy : Strategy {
                 && outGkBallMeetingTime < MAX_PREDICTED_TIME
                 && (predictedCollision == null || outGkBallMeetingTime < predictedCollision.second)) {
             //go to knock out
-            val knokingOutPosition = ballActiveObject.predictedPosition(outGkBallMeetingTime, rules.arena)
+            val knokingOutPosition = ballActiveObject.predictedPosition(outGkBallMeetingTime, simulator)
             targetPostions[me.id] = knokingOutPosition
         } else { //hold goals
             val rawTargetX = predictedCollision?.first?.x ?: predictedBallPosition.x
-            val targetPosition = Point(adjustGoalkeeperXPosition(rawTargetX), 0.0, goalZ)
+            val targetPosition = Vector3d(adjustGoalkeeperXPosition(rawTargetX), 0.0, goalZ)
             targetPostions[me.id] = targetPosition
         }
 
@@ -74,14 +96,16 @@ class MyStrategy : Strategy {
         kickIfPossible(predictedBallPosition)
     }
 
-    private fun kickIfPossible(predictedBallPosition: Point) {
+    private fun kickIfPossible(predictedBallPosition: Vector3d) {
         if ((me.x - game.ball.x).absoluteValue < (game.ball.radius + me.radius) * 1.1 && (me.z - game.ball.z).absoluteValue < (game.ball.radius + me.radius) * 1.25) {
             if (me.z < game.ball.z) {
                 action.jump_speed = computeJumpSpeed()
-                val distanceToBallX = predictedBallPosition.x - me.x
-                val distanceToBallZ = predictedBallPosition.z - me.z
-                action.target_velocity_x = distanceToBallX
-                action.target_velocity_z = distanceToBallZ
+                action.target_velocity_x = 0.0
+                action.target_velocity_z = 0.0
+//                val distanceToBallX = predictedBallPosition.x - me.x
+//                val distanceToBallZ = predictedBallPosition.z - me.z
+//                action.target_velocity_x = distanceToBallX
+//                action.target_velocity_z = distanceToBallZ
             }
         }
     }
@@ -100,12 +124,12 @@ class MyStrategy : Strategy {
 
     private fun adjustGoalkeeperXPosition(rawTargetX: Double) = min(max(rawTargetX, minGoalX), maxGoalX)
 
-    private fun manageForwards() {
+    private fun attack() {
         if (isGk) return
-        val ballActiveObject = game.ball.toActiveObject()
+        val ballActiveObject = game.ball.toEntity(simulator.rules)
 
-        val forwardBallMeetingTime = timeToMeetingManagedAndUnmanagedObjects(me.toActiveObject(), ballActiveObject)
-        val predictedBallPosition = ballActiveObject.predictedPosition(forwardBallMeetingTime, rules.arena)
+        val forwardBallMeetingTime = simulator.timeToMeetingManagedAndUnmanagedObjects(me.toActiveObject(simulator.rules), ballActiveObject)
+        val predictedBallPosition = ballActiveObject.predictedPosition(forwardBallMeetingTime, simulator)
         val bestPositionToKick = findBestPositionToKick(if (predictedBallPosition.y > me.radius * 2) ballActiveObject.position else predictedBallPosition)
         val allOpponentsAreOnTheirSide = opponents.map { it.z }.all { it > 0 }
         forwardsAreWaiting = false
@@ -117,18 +141,20 @@ class MyStrategy : Strategy {
                 bestPositionToKick.z
             }
         } else bestPositionToKick.z
-        targetPostions[me.id] = Point(bestPositionToKick.x, 0.0, zPos)
-        println("Tick: ${game.current_tick}")
-        println("Forward ball meeting time: $forwardBallMeetingTime")
-        println("Predicted ball position: $predictedBallPosition")
-        println("Forward target pos: ${targetPostions[me.id]}")
+        targetPostions[me.id] = Vector3d(bestPositionToKick.x, 0.0, zPos)
+        if (false) {
+            println("Tick: ${game.current_tick}")
+            println("Forward ball meeting time: $forwardBallMeetingTime")
+            println("Predicted ball position: $predictedBallPosition")
+            println("Forward target pos: ${targetPostions[me.id]}")
+        }
 
         goToTargetPosition()
         processMovingActionAccordingToPotentialFields()
         kickIfPossible(predictedBallPosition)
     }
 
-    private fun findBestPositionToKick(predictedBallPosition: Point): Point {
+    private fun findBestPositionToKick(predictedBallPosition: Vector3d): Vector3d {
         val (ballX, _, ballZ) = predictedBallPosition
         val opponentGoalX = rules.arena.goal_width / 2
         val opponentGoalZ = rules.arena.depth / 2 + game.ball.radius
@@ -139,30 +165,28 @@ class MyStrategy : Strategy {
         val x2z2 = sqrt(hypot) // x ^ 2 + z ^ 2  => x ^ 2 + xzProportion ^ 2 * x ^ 2 => x ^ 2 ( 1 + xzProportion)
         val x = sqrt(x2z2 / (1 + xzProportion))
         val z = x / xzProportion.safeZero()
-        return Point(ballX + game.ball.velocity_x.sign * x, 0.0, ballZ - z)
+        return Vector3d(ballX + game.ball.velocity_x.sign * x, 0.0, ballZ - z)
     }
 
     private fun computeJumpSpeed(): Double {
         if (game.ball.z < 0) {
             return rules.ROBOT_MAX_JUMP_SPEED
         } else {
-            val halfOfDepth = rules.arena.goal_depth / 2
-            val minJumpSpeed = rules.ROBOT_MAX_JUMP_SPEED * 0.1
-            return max(rules.ROBOT_MAX_JUMP_SPEED * 0.8 * (halfOfDepth / (halfOfDepth + game.ball.z)), minJumpSpeed)
+            return 0.8 * rules.ROBOT_MAX_JUMP_SPEED
         }
     }
 
-    private fun init(me: Robot, rules: Rules, game: Game, action: Action) {
-        this.me = me
-        this.rules = rules
-        this.game = game
-        this.action = action
-        isGk = me.id == teammates.goalkeeper.id
-        targetPostions.clear()
-    }
-
     override fun customRendering(): String {
-        return gson.toJson(collectDebugInfo(teammates, opponents, game, rules, targetPostions, potentialFields))
+        return gson.toJson(
+                collectDebugInfo(
+                        states,
+                        teammates,
+                        opponents,
+                        game,
+                        targetPostions,
+                        potentialFields,
+                        simulator
+                ))
     }
 
 

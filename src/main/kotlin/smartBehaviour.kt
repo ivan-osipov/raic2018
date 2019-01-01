@@ -1,51 +1,48 @@
-import model.Arena
-import model.Rules
-import kotlin.math.absoluteValue
+import kotlin.math.ceil
 import kotlin.math.min
-import kotlin.math.sign
 
 val MAX_PREDICTED_TIME = 3.0
 
-fun ActiveObject.predictedPosition(after: Double, arena: Arena): Point {
-    val rawX = x + velocity_x * after
-    val rawY = radius
-    val rawZ = z + velocity_z * after
+fun Entity.predictedPosition(afterSecs: Double, simulator: Simulator): Vector3d {
+    val deltaTime = simulator.deltaTime(min(MAX_PREDICTED_TIME, afterSecs))
+    val ticksCount = ceil(afterSecs / deltaTime).toInt()
 
-    var y = min(rawY, arena.height)
-    var x = rawX.sign * min(rawX.absoluteValue, arena.width / 2)
-    var z = rawZ.sign * min(rawZ.absoluteValue, arena.depth / 2 + arena.goal_depth)
-
-    if (z.absoluteValue > arena.depth / 2) {
-        x = x.sign * min(x.absoluteValue, arena.goal_width / 2)
-        y = y.sign * min(y.absoluteValue, arena.goal_height / 2)
+    var predictedEntity = this
+    for (tick in 0..ticksCount) {
+        predictedEntity = simulator.move(predictedEntity, deltaTime)
     }
 
-    return Point(x, y, z)
+    return predictedEntity.position
 }
 
-fun ActiveObject.predictedPositionWithoutY(after: Double): Point {
-    return Point(x + velocity_x * after, 0.0, z + velocity_z * after)
+fun Entity.predictedPositionChain(afterSecs: Double, simulator: Simulator): List<Vector3d> {
+    val deltaTime = simulator.deltaTime(min(MAX_PREDICTED_TIME, afterSecs))
+    val ticksCount = ceil(afterSecs / deltaTime).toInt()
+
+    var predictedEntity = this
+    val predictedPositions = ArrayList<Vector3d>()
+    for (tick in 0..ticksCount) {
+        predictedEntity = simulator.move(predictedEntity, deltaTime)
+        simulator.collideWithArena(predictedEntity)?.let {
+            predictedEntity = it
+        }
+        predictedPositions.add(predictedEntity.position)
+    }
+
+    return predictedPositions
 }
 
-fun predictedCollision(obj1: ActiveObject, obj2: ActiveObject): Pair<Point, Double>? {
+fun predictedCollision(obj1: Entity, obj2: Entity, simulator: Simulator): Pair<Vector3d, Double>? {
     val maxTime = MAX_PREDICTED_TIME //sec
     val step = 0.01
     val amount = (maxTime / step).toInt()
     for (i in 0..amount) {
         val time = step * i
-        val obj1PredictedPos = obj1.predictedPositionWithoutY(time)
-        val obj2PredictedPos = obj2.predictedPositionWithoutY(time)
+        val obj1PredictedPos = obj1.predictedPosition(time, simulator)
+        val obj2PredictedPos = obj2.predictedPosition(time, simulator)
         if (distance(obj1PredictedPos, obj2PredictedPos) <= obj1.radius + obj2.radius) {
             return Pair(obj2PredictedPos, time)
         }
     }
     return null
-}
-
-public fun timeToMeetingManagedAndUnmanagedObjects(managedObject: ActiveObject, unmanagedObject: ActiveObject): Double {
-    return distance(managedObject, unmanagedObject) / unmanagedObject.velocity().safeZero()
-}
-
-public fun timeToMeetingRunningRobotAndUnmanagedObjects(runningRobot: ActiveObject, unmanagedObject: ActiveObject, rules: Rules): Double {
-    return distance(runningRobot, unmanagedObject) / (rules.ROBOT_MAX_GROUND_SPEED / 2 + unmanagedObject.velocity().safeZero())
 }

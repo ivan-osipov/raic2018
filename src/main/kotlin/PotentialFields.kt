@@ -108,7 +108,7 @@ class PotentialFields(val robot: Robot, game: Game, val rules: Rules, val action
     }
 
 
-    fun modifyWayPointsByCurrentTargetPosition(point: Point) {
+    fun modifyWayPointsByCurrentTargetPosition(point: Vector3d) {
         val (x, y) = mapOnField(point.z, point.x)
         val (robotX, robotY) = mapOnField(robot.z, robot.x)
         val diffX = robotX - x

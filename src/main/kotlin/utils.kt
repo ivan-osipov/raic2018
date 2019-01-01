@@ -1,20 +1,19 @@
 import model.Ball
 import model.Robot
+import model.Rules
 import kotlin.math.absoluteValue
-import kotlin.math.pow
-import kotlin.math.sqrt
 
-fun distance(from: ActiveObject, to: ActiveObject) = distance(from.position, to.position)
+fun distance(from: Entity, to: Entity) = distance(from.position, to.position)
 
-fun distance(from: Point, to: Point) = sqrt((from.x - to.x).pow(2) + (from.y - to.y).pow(2) + (from.z - to.z).pow(2))
+fun distance(from: Vector3d, to: Vector3d) = (to - from).length()
 
 fun Double.sign(): Double = this.safeZero() / this.absoluteValue.safeZero()
 
 fun Double.safeZero() = if (this.absoluteValue < 0.000001) 0.000001 else this
 
-fun Ball.toActiveObject() = ActiveObject(this)
+fun Ball.toEntity(rules: Rules) = Entity(this, rules)
 
-fun Robot.toActiveObject() = ActiveObject(this)
+fun Robot.toActiveObject(rules: Rules) = Entity(this, rules)
 
 val Collection<Robot>.goalkeeper
     get() = this/*.sortedByDescending { distance(it, game.ball) }*/.first()

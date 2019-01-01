@@ -18,7 +18,7 @@ class Line(
         val a: Double = 1.0
 ) {
 
-    constructor(from: Point, to: Point,
+    constructor(from: Vector3d, to: Vector3d,
                 radius: Double = 1.0, r: Double = 1.0, g: Double = 1.0, b: Double = 1.0, a: Double = 1.0)
             : this(from.x, from.y, from.z, to.x, to.y, to.z, radius, r, g, b, a)
 }
