@@ -1,10 +1,60 @@
 import model.Rules
 import java.util.*
-import kotlin.math.max
-import kotlin.math.min
+import kotlin.math.ceil
 
 class Simulator(val rules: Rules) {
+    val MAX_PREDICTED_TIME = 3.0
+
     private val arena = rules.arena
+
+    fun predictedPositionIndexBeforeMyGoal(positions: List<Vector3d>): Int? {
+        for (i in 0..(positions.size - 1)) {
+            val position = positions[i]
+            if (position.z <= -rules.arena.depth / 2 + rules.BALL_RADIUS) {
+                return i
+            }
+        }
+        return null
+    }
+
+    fun predictedWorldStates(worldState: WorldState): List<WorldState> {
+        val deltaTime = deltaTime()
+        val ticksCount = ceil(MAX_PREDICTED_TIME / deltaTime).toInt()
+
+        var currentWorldState = worldState
+        val predictedWorldStates = ArrayList<WorldState>()
+        for (tick in 0..ticksCount) {
+            val robots = currentWorldState.robots.map { move(it, deltaTime) }.toMutableList()
+            var ball = move(currentWorldState.ball, deltaTime)
+
+            for (i in 0 until robots.size) {
+                for (j in 0 until i) {
+                    val (robotI, robotJ) = collideEntities(robots[i], robots[j]) ?: continue
+                    robots[i] = robotI
+                    robots[j] = robotJ
+                }
+            }
+
+            for (i in 0 until robots.size) {
+                val collideResult = collideEntities(robots[i], ball)
+                if (collideResult != null) {
+                    val (newRobotState, newBallState) = collideResult
+                    ball = newBallState
+                    robots[i] = newRobotState
+                }
+
+                robots[i] = collideWithArena(robots[i]) ?: continue
+            }
+
+            ball = collideWithArena(ball) ?: ball
+
+            currentWorldState = WorldState(robots, ball)
+
+            predictedWorldStates.add(currentWorldState)
+        }
+
+        return predictedWorldStates
+    }
 
     fun timeToMeetingManagedAndUnmanagedObjects(managedObject: Entity,
                                                 unmanagedObject: Entity): Double {
@@ -24,7 +74,7 @@ class Simulator(val rules: Rules) {
             val bCopy = Entity(b)
             aCopy.position -= normal * penetration * coefA
             bCopy.position += normal * penetration * coefB
-            val deltaVelocity = (b.velocity - a.velocity) * normal /*- b.radius_change_speed - a.radius_change_speed*/
+            val deltaVelocity = (b.velocity - a.velocity) * normal - b.radiusChangeSpeed - a.radiusChangeSpeed
             if (deltaVelocity < 0) {
                 val impulse = normal * deltaVelocity * (1 + random(rules.MIN_HIT_E, rules.MAX_HIT_E))
                 a.velocity += impulse * coefA
@@ -63,8 +113,8 @@ class Simulator(val rules: Rules) {
         return copy
     }
 
-    fun deltaTime(sec: Double = 1.0): Double {
-        return sec / 10
+    fun deltaTime(sec: Double = MAX_PREDICTED_TIME): Double {
+        return sec / 50
     }
 
     fun danToArena(point: Vector3d): Dan {
@@ -374,8 +424,6 @@ class Simulator(val rules: Rules) {
 
         return dan
     }
-
-    private fun clamp(value: Double, minValue: Double, maxValue: Double) = max(min(value, maxValue), minValue)
 
     private fun clamp(vector3d: Vector3d, maxValue: Double): Vector3d {
         val reductionCoefficient = vector3d.length() / maxValue
