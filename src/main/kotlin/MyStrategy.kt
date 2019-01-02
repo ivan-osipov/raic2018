@@ -43,6 +43,7 @@ class MyStrategy : Strategy {
 
     var forwardsAreWaiting = false
     lateinit var potentialFields: PotentialFields
+    var initialized: Boolean = false
 
     override fun act(me: Robot, rules: Rules, game: Game, action: Action) {
         init(me, rules, game, action)
@@ -83,6 +84,8 @@ class MyStrategy : Strategy {
             predictedWorldStates = simulator.predictedWorldStates(WorldState(entitiesByRobotIds.values.toList(), ballEntity))
             lastPredictingTick = game.current_tick
         }
+
+        initialized = true
     }
 
     private fun doBehaviour() {
