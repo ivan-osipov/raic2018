@@ -1,7 +1,6 @@
 enum class RobotState {
     ATTACK,
-    RUNNING_ON_POSITION,
-    WAITING,
+    ACTIVE_DEFENCE,
     KNOCKING_OUT,
     DEFENCE
 }
