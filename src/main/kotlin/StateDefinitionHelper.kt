@@ -3,7 +3,7 @@ class StateDefinitionHelper(
 ) : StrategyComponent(strategy) {
 
     fun computeStateMap(): Map<Int, RobotState> {
-        if (!strategy.initialized) {
+        if (strategy.states.isEmpty()) {
             val (teammate1, teammate2) = strategy.teammates
                     .sortedBy { distance(strategy.entitiesByRobotIds[it.id]!!.position, strategy.frontGoalPoint) }
             return mapOf(

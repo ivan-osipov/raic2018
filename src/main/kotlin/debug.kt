@@ -1,7 +1,4 @@
 fun collectDebugInfo(strategy: MyStrategy): List<IDebugInfo> {
-    if(!strategy.initialized) {
-        return emptyList()
-    }
     val teammateDebugInfo = strategy.teammates
             .flatMap {
                 val (r, g, b) = when (strategy.states[it.id]) {
@@ -9,7 +6,7 @@ fun collectDebugInfo(strategy: MyStrategy): List<IDebugInfo> {
                     RobotState.KNOCKING_OUT -> Vector3d(0.0, 1.0, 1.0)
                     RobotState.ATTACK -> Vector3d(1.0, 0.0, 0.0)
                     RobotState.ACTIVE_DEFENCE -> Vector3d(1.0, 1.0, 1.0)
-                    else -> throw IllegalStateException("Unsupported state ${strategy.states[it.id]}")
+                    else -> Vector3d(0.0, 0.0, 0.0)
                 }
                 val targetPosition = strategy.targetPositions[it.id]!!
                 val teammateDebugInfo = mutableListOf(

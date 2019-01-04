@@ -35,7 +35,7 @@ class MyStrategy : Strategy {
     var lastPredictingTick = -1
     val targetPositions = HashMap<Int, Vector3d>()
     val entitiesByRobotIds: MutableMap<Int, Entity> = HashMap()
-    lateinit var states: Map<Int, RobotState>
+    var states: Map<Int, RobotState> = HashMap()
     lateinit var teammates: List<Robot>
     lateinit var opponents: List<Robot>
     lateinit var ballEntity: Entity
@@ -43,7 +43,6 @@ class MyStrategy : Strategy {
 
     var forwardsAreWaiting = false
     //    lateinit var potentialFields: PotentialFields
-    var initialized: Boolean = false
     var score = "0x0"
 
     override fun act(me: Robot, rules: Rules, game: Game, action: Action) {
@@ -86,8 +85,6 @@ class MyStrategy : Strategy {
 
         this.stateDefinitionHelper = StateDefinitionHelper(this)
         states = stateDefinitionHelper.computeStateMap()
-
-        initialized = true
     }
 
     private fun doBehaviour() {
@@ -96,8 +93,8 @@ class MyStrategy : Strategy {
             DEFENCE -> DefenceBehaviour(this)
             KNOCKING_OUT -> KnockOutBehaviour(this)
             ACTIVE_DEFENCE -> ActiveDefenceBehaviour(this)
-            else -> throw IllegalStateException("Unsupported state ${states[me.id]}")
-        }.doIt()
+            else -> null
+        }?.doIt()
     }
 
 //    fun processMovingActionAccordingToPotentialFields() {
