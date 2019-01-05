@@ -10,14 +10,14 @@ fun collectDebugInfo(strategy: MyStrategy): List<IDebugInfo> {
                 }
                 val targetPosition = strategy.targetPositions[it.id]!!
                 val teammateDebugInfo = mutableListOf(
-                        Text("${it.id} ${strategy.states[it.id]} {x:${"%.2f".format(it.x)} y:${"%.2f".format(it.y)} z:${"%.2f".format(it.z)}} " +
+                        Text("${it.id} ${strategy.states[it.id]} (${strategy.internalStates[it.id]}) {x:${"%.2f".format(it.x)} y:${"%.2f".format(it.y)} z:${"%.2f".format(it.z)}} " +
                                 "{x:${"%.2f".format(targetPosition.x)} y:${"%.2f".format(targetPosition.y)} z:${"%.2f".format(targetPosition.z)}}"),
                         LineContainer(Line(it.x, it.y, it.z,
                                 it.x + it.velocity_x, it.y + it.velocity_y, it.z + it.velocity_z)),
                         SphereContainer(Sphere(it.x + it.radius, it.y + it.radius, it.z + it.radius, 0.1, r, g, b)))
                 strategy.targetPositions[it.id]?.let { target ->
                     teammateDebugInfo.add(SphereContainer(Sphere(target.x, target.y, target.z,
-                            0.5, 0.0, 0.0, 1.0))) //blue
+                            0.5, r, g, b)))
                 }
                 teammateDebugInfo
             }

@@ -4,23 +4,24 @@ import model.Robot
 import model.Rules
 
 abstract class StrategyComponent(val strategy: MyStrategy) {
-    val me: Robot = strategy.me
-    val rules: Rules = strategy.rules
-    val game: Game = strategy.game
-    val action: Action = strategy.action
+    val me: Robot by lazy { strategy.me }
+    val rules: Rules by lazy { strategy.rules }
+    val game: Game by lazy { strategy.game }
+    val action: Action by lazy { strategy.action }
 
-    val frontGoalPoint = strategy.frontGoalPoint
-    val minGoalX = strategy.minGoalX
-    val maxGoalX = strategy.maxGoalX
-    val goalZ = strategy.goalZ
+    val frontGoalPoint by lazy { strategy.frontGoalPoint }
+    val frontOpponentGoalPoint by lazy { strategy.frontOpponentGoalPoint }
+    val minGoalX by lazy { strategy.minGoalX }
+    val maxGoalX by lazy { strategy.maxGoalX }
+    val goalZ by lazy { strategy.goalZ }
 
-    val simulator = strategy.simulator
-    val entitiesByRobotIds = strategy.entitiesByRobotIds
-    val predictedBallPositions = strategy.predictedBallPositions
-    val myEntity = strategy.myEntity
-    val ballEntity = strategy.ballEntity
-    val teammates = strategy.teammates
-    val targetPositions = strategy.targetPositions
-    val predictedWorldStates = strategy.predictedWorldStates
-    val opponents = strategy.opponents
+    val simulator by lazy { strategy.simulator }
+    val entitiesByRobotIds by lazy { strategy.entitiesByRobotIds }
+    val predictedBallPositions by lazy { strategy.predictedBallPositions }
+    val myEntity by lazy { strategy.myEntity }
+    val ballEntity by lazy { strategy.ballEntity }
+    val teammates by lazy { strategy.teammates }
+    val targetPositions by lazy { strategy.targetPositions }
+    val predictedWorldStates by lazy { strategy.predictedWorldStates }
+    val opponents by lazy { strategy.opponents }
 }

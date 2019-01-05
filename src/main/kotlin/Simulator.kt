@@ -1,8 +1,11 @@
-import model.Rules
+import java.lang.IllegalStateException
 import java.util.*
+import kotlin.collections.HashMap
 import kotlin.math.ceil
+import kotlin.math.min
+import kotlin.math.sqrt
 
-class Simulator(val rules: Rules) {
+class Simulator(strategy: MyStrategy): StrategyComponent(strategy) {
     val MAX_PREDICTED_TIME = 3.0
 
     private val arena = rules.arena
@@ -19,11 +22,13 @@ class Simulator(val rules: Rules) {
 
     fun predictedWorldStates(worldState: WorldState): List<WorldState> {
         val deltaTime = deltaTime()
+        val realDeltaTime = realDeltaTime()
+        val startTick = worldState.tick
         val ticksCount = ceil(MAX_PREDICTED_TIME / deltaTime).toInt()
 
         var currentWorldState = worldState
         val predictedWorldStates = ArrayList<WorldState>()
-        for (tick in 0..ticksCount) {
+        for (tick in 1..ticksCount) {
             val robots = currentWorldState.robots.map { move(it, deltaTime) }.toMutableList()
             var ball = move(currentWorldState.ball, deltaTime)
 
@@ -48,7 +53,8 @@ class Simulator(val rules: Rules) {
 
             ball = collideWithArena(ball) ?: ball
 
-            currentWorldState = WorldState(robots, ball)
+            val worldStateTick = startTick + (deltaTime * tick / realDeltaTime).toInt()
+            currentWorldState = WorldState(worldStateTick, ball, robots)
 
             predictedWorldStates.add(currentWorldState)
         }
@@ -115,6 +121,10 @@ class Simulator(val rules: Rules) {
 
     fun deltaTime(sec: Double = MAX_PREDICTED_TIME): Double {
         return sec / 50
+    }
+
+    fun realDeltaTime(sec: Double = MAX_PREDICTED_TIME): Double {
+        return sec / rules.TICKS_PER_SECOND / rules.MICROTICKS_PER_TICK
     }
 
     fun danToArena(point: Vector3d): Dan {
@@ -432,6 +442,63 @@ class Simulator(val rules: Rules) {
                 vector3d.y * reductionCoefficient,
                 vector3d.z * reductionCoefficient
         )
+    }
+
+    fun findBestPlaceTo(robotEntity: Entity,
+                        targetEntity: Entity,
+                        tick: Int,
+                        predictedWorldStates: List<WorldState>): Vector3d {
+        val currentPosition = robotEntity.position
+        val realDeltaTime = realDeltaTime()
+
+        var firstFutureState: Map<Int, Entity> = HashMap()
+        for (worldState in predictedWorldStates) {
+            val (futureTick, futureBall, robots) = worldState
+            val futureEntities = collectEntityMap(futureBall, robots)
+            if(firstFutureState.isEmpty()) {
+                firstFutureState = futureEntities
+            }
+
+            val targetFutureEntity = futureEntities[targetEntity.id]!!
+            val distanceToMeeting = targetFutureEntity.position - currentPosition
+            val timeToFuture = (futureTick - tick) * realDeltaTime
+            val requiredTime = computeRequiredTime(distanceToMeeting.length() - robotEntity.radius - targetEntity.radius)
+
+            if(requiredTime > timeToFuture) {
+//                println("Skipped (${game.current_tick}): Time to future: $timeToFuture required: $requiredTime distance: $distanceToMeeting")
+                continue
+            }
+            return targetFutureEntity.position
+        }
+        return firstFutureState[targetEntity.id]!!.position
+    }
+
+    private fun computeRequiredTime(distance: Double): Double {
+        val a = rules.ROBOT_ACCELERATION
+        val v = rules.ROBOT_MAX_GROUND_SPEED
+        val timeToCompletelyChangeSpeed = v / a
+        val timeToCoverHalfOfWayWithoutLimitations = sqrt(distance / 2 / a)
+        val tStart = min(timeToCompletelyChangeSpeed, timeToCoverHalfOfWayWithoutLimitations)
+        val tStop = min(timeToCompletelyChangeSpeed, timeToCoverHalfOfWayWithoutLimitations)
+        val uniformlyAcceleratedMotion = distance - (a * tStart * tStart) - (a * tStop * tStop)
+        if(uniformlyAcceleratedMotion < -20.001) {
+            throw IllegalStateException("uniformlyAcceleratedMotion is $uniformlyAcceleratedMotion tStart $tStart tStop $tStop")
+        }
+        val uniformlyAcceleratedMotionTime = if(uniformlyAcceleratedMotion > 0) uniformlyAcceleratedMotion / v else 0.0
+
+        return tStart + uniformlyAcceleratedMotionTime + tStop
+    }
+
+    private fun collectEntityMap(futureBall: Entity, robots: List<Entity>): MutableMap<Int, Entity> {
+        val futureEntities = mutableMapOf(
+                futureBall.id to futureBall
+        )
+        futureEntities.putAll(robots.map { it.id to it }.toMap())
+        return futureEntities
+    }
+
+    fun findBestPlaceToKickOut(robotEntity: Entity, tick: Int, predictedWorldStates: List<WorldState>): Vector3d {
+        return findBestPlaceTo(robotEntity, ballEntity, tick, predictedWorldStates)
     }
 
     data class Dan(

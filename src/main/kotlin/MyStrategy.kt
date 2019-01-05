@@ -12,7 +12,9 @@ class MyStrategy : Strategy {
     val maxGoalX by lazy { rules.arena.goal_width / 2 - rules.arena.bottom_radius }
     val minGoalX by lazy { -rules.arena.goal_width / 2 + rules.arena.bottom_radius }
     val goalZ by lazy { -rules.arena.depth / 2 }
+    val opponentGoalZ by lazy { rules.arena.depth / 2 }
     val frontGoalPoint by lazy { Vector3d((maxGoalX + minGoalX) / 2, me.radius, goalZ) }
+    val frontOpponentGoalPoint by lazy { Vector3d((maxGoalX + minGoalX) / 2, me.radius, opponentGoalZ) }
 
     //tick data
     lateinit var me: Robot
@@ -36,22 +38,17 @@ class MyStrategy : Strategy {
     val targetPositions = HashMap<Int, Vector3d>()
     val entitiesByRobotIds: MutableMap<Int, Entity> = HashMap()
     var states: Map<Int, RobotState> = HashMap()
+    var internalStates: MutableMap<Int, Any> = HashMap()
     lateinit var teammates: List<Robot>
     lateinit var opponents: List<Robot>
     lateinit var ballEntity: Entity
     lateinit var myEntity: Entity
 
-    var forwardsAreWaiting = false
     //    lateinit var potentialFields: PotentialFields
     var score = "0x0"
+    var ballIsPlayed = false
 
     override fun act(me: Robot, rules: Rules, game: Game, action: Action) {
-        val newScore = game.players.toList().sortedByDescending { it.me }.joinToString("x") { it.score.toString() }
-        if(newScore != score) {
-            score = newScore
-            println(score)
-        }
-
         init(me, rules, game, action)
         doBehaviour()
     }
@@ -61,7 +58,6 @@ class MyStrategy : Strategy {
         this.rules = rules
         this.game = game
         this.action = action
-        this.simulator = Simulator(rules)
 
         teammates = game.robots.teammates
         opponents = game.robots.opponents
@@ -77,14 +73,28 @@ class MyStrategy : Strategy {
             targetPositions[teammate.id] = entitiesByRobotIds[teammate.id]!!.position
         }
 
+        this.simulator = Simulator(this)
+
         if (lastPredictingTick != game.current_tick) {
             ballEntity = game.ball.toEntity(rules)
-            predictedWorldStates = simulator.predictedWorldStates(WorldState(entitiesByRobotIds.values.toList(), ballEntity))
+            predictedWorldStates = simulator.predictedWorldStates(WorldState(
+                    game.current_tick,
+                    ballEntity,
+                    entitiesByRobotIds.values.toList()))
             lastPredictingTick = game.current_tick
         }
 
         this.stateDefinitionHelper = StateDefinitionHelper(this)
         states = stateDefinitionHelper.computeStateMap()
+
+        val newScore = game.players.toList().sortedByDescending { it.me }.joinToString("x") { it.score.toString() }
+        if(newScore != score) {
+            score = newScore
+            ballIsPlayed = false
+            println(score)
+        } else {
+            ballIsPlayed = ballEntity.position.x != 0.0 || ballEntity.position.z != 0.0
+        }
     }
 
     private fun doBehaviour() {
@@ -92,9 +102,12 @@ class MyStrategy : Strategy {
             ATTACK -> AttackBehaviour(this)
             DEFENCE -> DefenceBehaviour(this)
             KNOCKING_OUT -> KnockOutBehaviour(this)
-            ACTIVE_DEFENCE -> ActiveDefenceBehaviour(this)
+            ACTIVE_DEFENCE ->   ActiveDefenceBehaviour(this)
             else -> null
-        }?.doIt()
+        }?.apply {
+            doIt()
+            internalStates[me.id] = getCurrentState()
+        }
     }
 
 //    fun processMovingActionAccordingToPotentialFields() {

@@ -1,13 +1,15 @@
 import model.Ball
 import model.Robot
 import model.Rules
-import kotlin.math.absoluteValue
-import kotlin.math.max
-import kotlin.math.min
+import kotlin.math.*
 
 fun distance(from: Entity, to: Entity) = distance(from.position, to.position)
 
 fun distance(from: Vector3d, to: Vector3d) = (to - from).length()
+
+fun distanceOnFlat(e1: Entity, e2: Entity): Double {
+    return sqrt(distance(e1, e2).pow(2) - (e1.radius - e2.radius).pow(2))
+}
 
 fun Double.safeZero() = if (this.absoluteValue < 0.000001) 0.000001 else this
 

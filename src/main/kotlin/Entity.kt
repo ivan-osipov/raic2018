@@ -40,4 +40,10 @@ open class Entity {
         this.arenaE = rules.ROBOT_ARENA_E
         this.radiusChangeSpeed = rules.ROBOT_MAX_JUMP_SPEED / 2
     }
+
+    override fun toString(): String {
+        return "Entity(id=$id, position=$position, velocity=$velocity, radius=$radius, mass=$mass, arenaE=$arenaE, radiusChangeSpeed=$radiusChangeSpeed)"
+    }
+
+
 }

@@ -1,4 +1,5 @@
-class WorldState(
-        val robots: List<Entity>,
-        val ball: Entity
+data class WorldState(
+        val tick: Int,
+        val ball: Entity,
+        val robots: List<Entity>
 )
